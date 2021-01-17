@@ -19,6 +19,7 @@ from os.path import splitext
 import idutils
 from flask import Blueprint, abort, current_app, g, render_template, request
 from flask_menu import current_menu
+from flask_login import login_required
 from invenio_files_rest.views import ObjectResource
 from invenio_i18n.ext import current_i18n
 from invenio_previewer.views import is_previewable
@@ -65,6 +66,7 @@ def ui_blueprint(app):
         return render_template(current_app.config['SEARCH_BASE_TEMPLATE'])
 
     @blueprint.route(app.config.get('RDM_RECORDS_UI_NEW_URL', '/uploads/new'))
+    @login_required
     def deposits_create():
         """Record creation page."""
         forms_config = dict(
@@ -85,6 +87,7 @@ def ui_blueprint(app):
     @blueprint.route(
         app.config.get('RDM_RECORDS_UI_EDIT_URL', '/uploads/<pid_value>')
     )
+    @login_required
     def deposits_edit(pid_value):
         """Deposit edit page."""
         links_config = BibliographicDraftResourceConfig.links_config
@@ -126,6 +129,7 @@ def ui_blueprint(app):
 
     @blueprint.route(
         app.config.get('RDM_RECORDS_UI_SEARCH_USER_URL', '/uploads'))
+    @login_required
     def deposits_user():
         """List of user deposits page."""
         return render_template(
