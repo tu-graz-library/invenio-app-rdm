@@ -19,6 +19,8 @@ from os.path import splitext
 import idutils
 from flask import Blueprint, abort, current_app, g, render_template, request
 from flask_menu import current_menu
+from flask_security import current_user
+from flask_login import login_required
 from invenio_files_rest.views import ObjectResource
 from invenio_i18n.ext import current_i18n
 from invenio_previewer.views import is_previewable
@@ -64,6 +66,7 @@ def ui_blueprint(app):
         return render_template(current_app.config['SEARCH_BASE_TEMPLATE'])
 
     @blueprint.route(app.config.get('RDM_RECORDS_UI_NEW_URL', '/uploads/new'))
+    @login_required
     def deposits_create():
         """Record creation page."""
         forms_config = dict(
@@ -84,6 +87,7 @@ def ui_blueprint(app):
     @blueprint.route(
         app.config.get('RDM_RECORDS_UI_EDIT_URL', '/uploads/<pid_value>')
     )
+    @login_required
     def deposits_edit(pid_value):
         """Deposit edit page."""
         links_config = RDMDraftResourceConfig.links_config
@@ -106,24 +110,29 @@ def ui_blueprint(app):
         serializer = UIJSONSerializer()
         record = serializer.serialize_object_to_dict(draft.to_dict())
 
-        # TODO: get the `is_published` field when reading the draft
-        from invenio_pidstore.errors import PIDUnregistered
-        try:
-            service.draft_cls.pid.resolve(pid_value, registered_only=True)
-            record["is_published"] = True
-        except PIDUnregistered:
-            record["is_published"] = False
+        if has_permission(record):
+            # TODO: get the `is_published` field when reading the draft
+            from invenio_pidstore.errors import PIDUnregistered
+            try:
+                service.draft_cls.pid.resolve(pid_value, registered_only=True)
+                record["is_published"] = True
+            except PIDUnregistered:
+                record["is_published"] = False
 
+            return render_template(
+                current_app.config['DEPOSITS_FORMS_BASE_TEMPLATE'],
+                forms_config=forms_config,
+                record=record,
+                files=files_list.to_dict(),
+                searchbar_config=dict(searchUrl=search_url)
+            )
         return render_template(
-            current_app.config['DEPOSITS_FORMS_BASE_TEMPLATE'],
-            forms_config=forms_config,
-            record=record,
-            files=files_list.to_dict(),
-            searchbar_config=dict(searchUrl=search_url)
+            current_app.config['THEME_403_TEMPLATE']
         )
 
     @blueprint.route(
         app.config.get('RDM_RECORDS_UI_SEARCH_USER_URL', '/uploads'))
+    @login_required
     def deposits_user():
         """List of user deposits page."""
         return render_template(
@@ -182,6 +191,23 @@ def ui_blueprint(app):
         """
         PermissionPolicy = get_record_permission_policy()
         return PermissionPolicy(action='read_files', record=record).can()
+
+    @blueprint.app_template_filter('can_edit_record')
+    def can_edit_record(record):
+        """Permission check if current user can edit record.
+        This only applies for record_landing_page.html of recordManagement.
+        """
+        return has_permission(record)
+                
+    def has_permission(record):
+        """Permission check if current user is owner of the record."""
+        if current_user.is_authenticated:
+            owner = int(current_user.get_id())
+            access = record.get('access', {})
+            ids = access.get('owned_by', [])
+            if owner == ids[0]:
+                return True
+        return False
 
     @blueprint.app_template_filter('pid_url')
     def pid_url(identifier, scheme=None, url_scheme='https'):

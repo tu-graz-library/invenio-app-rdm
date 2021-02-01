@@ -19,10 +19,12 @@
 {%- set metadata = record.metadata %}
 
 {%- block page_body %}
+{%- if record|can_edit_record %}
 <div
   id="recordManagement"
   data-recid='{{ record["id"] | tojson }}'>
 </div>
+{% endif %}
 <div class="ui container">
   <div class="ui padded relaxed grid">
     <div class="two column row">
